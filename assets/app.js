@@ -142,8 +142,8 @@ function renderTable() {
         });
         html += '</tr>';
     }
-    // Calculate totals for relevant columns (add paidInAC)
-    const totalFields = ['purchase', 'booking', 'return', 'sell', 'netValue', 'prevDue', 'paidInAC', 'total'];
+    // Calculate totals for all columns that should appear in the Total row
+    const totalFields = ['purchase', 'booking', 'return', 'sell', 'rate', 'netValue', 'vc', 'prevDue', 'paidInAC', 'total'];
     const totals = {};
     totalFields.forEach(field => {
         if (field === 'rate') {
@@ -554,8 +554,8 @@ function tableDataToXLS(data, dateStr) {
         if (col.key !== 'view') xls += `<th>${col.label}</th>`;
     }
     xls += '</tr>';
-    // Calculate totals for relevant columns
-    const totalFields = ['purchase', 'return', 'sell', 'netValue', 'prevDue', 'total'];
+    // Calculate totals for all columns that appear in the Total row on the web table
+    const totalFields = ['purchase', 'booking', 'return', 'sell', 'rate', 'netValue', 'vc', 'prevDue', 'paidInAC', 'total'];
     const totals = {};
     totalFields.forEach(field => {
         totals[field] = data.reduce((sum, row) => sum + (Number(row[field]) || 0), 0);
@@ -565,12 +565,12 @@ function tableDataToXLS(data, dateStr) {
         xls += '<tr>';
         for (const col of TABLE_COLUMNS) {
             let val = row[col.key] !== undefined ? row[col.key] : '';
-            if (col.key === 'netValue' || col.key === 'total') val = val !== '' ? Math.round(val) : '';
+            if (col.key === 'netValue' || col.key === 'total' || col.key === 'purchase' || col.key === 'booking' || col.key === 'return' || col.key === 'sell' || col.key === 'rate' || col.key === 'vc' || col.key === 'prevDue' || col.key === 'paidInAC') val = val !== '' ? Math.round(val) : '';
             xls += `<td>${val}</td>`;
         }
         xls += '</tr>';
     }
-    // Add Total row
+    // Add Total row (all columns, matching web table)
     xls += '<tr style="font-weight:bold;background:#f3f6fa;">';
     TABLE_COLUMNS.forEach(col => {
         if (col.key === 'name') {
@@ -637,19 +637,23 @@ function downloadPDF(data, dateStr, filenamePrefix = 'Date') {
 function downloadCombinedPDF(reports, fromDate, toDate) {
     // Prepare summary for each date
     let summaryRows = [];
-    let sumTotals = { purchase: 0, return: 0, sell: 0, netValue: 0, prevDue: 0, total: 0 };
+    // All columns to show in summary (matching Total row)
+    const totalFields = ['purchase', 'booking', 'return', 'sell', 'rate', 'netValue', 'vc', 'prevDue', 'paidInAC', 'total'];
+    let sumTotals = {};
+    totalFields.forEach(f => sumTotals[f] = 0);
     for (const { date, data } of reports) {
-        // Calculate totals for relevant columns
-        const totalFields = ['purchase', 'return', 'sell', 'netValue', 'prevDue', 'total'];
         const totals = {};
         totalFields.forEach(field => {
-            totals[field] = data.reduce((sum, row) => sum + (Number(row[field]) || 0), 0);
-            totals[field] = Math.round(totals[field]);
-            sumTotals[field] += totals[field];
+            if (field === 'rate') {
+                totals[field] = '';
+            } else {
+                totals[field] = data.reduce((sum, row) => sum + (Number(row[field]) || 0), 0);
+                totals[field] = Math.round(totals[field]);
+                sumTotals[field] += totals[field];
+            }
         });
         summaryRows.push({ date, totals });
     }
-    // Round sumTotals
     Object.keys(sumTotals).forEach(k => { sumTotals[k] = Math.round(sumTotals[k]); });
     const win = window.open('', '', 'width=900,height=700');
     win.document.write('<html><head><title>PDF Export</title>');
@@ -658,26 +662,34 @@ function downloadCombinedPDF(reports, fromDate, toDate) {
     win.document.write(`<h2>Daily Business Snapshot<br>From ${formatDateForFile(fromDate)} To ${formatDateForFile(toDate)}</h2>`);
     // Summary table
     win.document.write('<h3>Summary of Total Row Values (Each Date)</h3>');
-    win.document.write('<table class="summary-table"><thead><tr><th>Date</th><th>Purchase</th><th>Return</th><th>SELL</th><th>NET VALUE</th><th>Previous Due</th><th>TOTAL</th></tr></thead><tbody>');
+    win.document.write('<table class="summary-table"><thead><tr><th>Date</th><th>Purchase</th><th>Booking</th><th>Return</th><th>SELL</th><th>Rate/PCS</th><th>NET VALUE</th><th>VC</th><th>Previous Due</th><th>Paid in A/C</th><th>TOTAL</th></tr></thead><tbody>');
     for (const row of summaryRows) {
         win.document.write('<tr>');
         win.document.write('<td>' + formatDateForFile(row.date) + '</td>');
         win.document.write('<td>' + row.totals.purchase + '</td>');
+        win.document.write('<td>' + row.totals.booking + '</td>');
         win.document.write('<td>' + row.totals.return + '</td>');
         win.document.write('<td>' + row.totals.sell + '</td>');
+        win.document.write('<td>' + row.totals.rate + '</td>');
         win.document.write('<td>' + row.totals.netValue + '</td>');
+        win.document.write('<td>' + row.totals.vc + '</td>');
         win.document.write('<td>' + row.totals.prevDue + '</td>');
+        win.document.write('<td>' + row.totals.paidInAC + '</td>');
         win.document.write('<td>' + row.totals.total + '</td>');
         win.document.write('</tr>');
     }
-    // Add sum row
+    // Add sum row (only one cell per column)
     win.document.write('<tr style="font-weight:bold;background:#ffe0b2;color:#d7263d;">');
     win.document.write('<td>Total Sum</td>');
     win.document.write('<td>' + sumTotals.purchase + '</td>');
+    win.document.write('<td>' + sumTotals.booking + '</td>');
     win.document.write('<td>' + sumTotals.return + '</td>');
     win.document.write('<td>' + sumTotals.sell + '</td>');
+    win.document.write('<td>' + sumTotals.rate + '</td>');
     win.document.write('<td>' + sumTotals.netValue + '</td>');
+    win.document.write('<td>' + sumTotals.vc + '</td>');
     win.document.write('<td>' + sumTotals.prevDue + '</td>');
+    win.document.write('<td>' + sumTotals.paidInAC + '</td>');
     win.document.write('<td>' + sumTotals.total + '</td>');
     win.document.write('</tr>');
     win.document.write('</tbody></table>');
@@ -766,13 +778,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Save for selected date, not just today
         var calendarInput = document.getElementById('calendar-date');
         var saveDate = calendarInput && calendarInput.value ? calendarInput.value : today;
+        // Save ALL table data (all rows, not just current page)
         saveReportToLocalStorage(saveDate, deepClone(tableData));
         renderReportList();
         // If the saved date is currently selected, reload table for that date
         if (calendarInput && calendarInput.value === saveDate) {
             loadTableForDate(saveDate);
         }
-        alert('Report saved!');
+        alert('Report saved! All table data for this date is now available in Saved Reports and can be exported as PDF.');
     };
     document.getElementById('clear-reports').onclick = function() {
         if (confirm('Delete ALL reports?')) {
