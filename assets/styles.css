@@ -43,6 +43,12 @@ h1 {
 #table-section {
     overflow-x: auto;
 }
+#status-indicator {
+    text-align: center;
+    margin: 10px 0;
+    font-weight: bold;
+    color: #d7263d;
+}
 /* Data view style for table */
 table {
     background: #fff;
@@ -123,24 +129,49 @@ button:hover {
     box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 #report-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
     list-style: none;
     padding: 0;
     margin: 0 0 12px 0;
 }
 #report-list li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid #e3e7ed;
+    background: #fff;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
-#report-list li:last-child {
-    border-bottom: none;
+#report-list li:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
 }
 .report-actions {
     display: flex;
     gap: 10px;
+    margin-top: 12px;
+    justify-content: center;
 }
+
+#customer-list-modal .modal-content {
+    max-width: 500px;
+}
+
+#customer-list-in-modal {
+    list-style: none;
+    padding: 0;
+}
+
+#customer-list-in-modal li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
 /* Icon styles */
 .report-icon, .delete-icon, .view-icon, .edit-icon {
     cursor: pointer;

@@ -29,7 +29,7 @@ const CUSTOMERS_PER_PAGE = 10;
 let tableData = [];
 let customerCount = 0;
 let reportPage = 1;
-const REPORTS_PER_PAGE = 5;
+const REPORTS_PER_PAGE = 8;
 const CUSTOMER_LIST_KEY = 'maa-tara-customer-list';
 const TABLE_DATA_KEY = 'maa-tara-table-data';
 
@@ -46,10 +46,10 @@ window.addEventListener('DOMContentLoaded', function() {
         // Set input to today
         var today = new Date();
         calendarInput.value = today.toISOString().slice(0, 10);
-        let selectedDateStr = calendarInput.value;
+        let currentDayStr = getTodayStr(); // Use getTodayStr for consistency
         dateDiv.textContent = formatDisplayDate(today);
         // Load table/report for today on load
-        loadTableForDate(selectedDateStr);
+        loadTableForDate(currentDayStr);
         // On change, update display and table/report
         calendarInput.addEventListener('change', function() {
             var selected = calendarInput.value;
@@ -62,27 +62,27 @@ window.addEventListener('DOMContentLoaded', function() {
     }
 });
 function getTodayStr() {
+    const d = new Date();
+    return d.toLocaleDateString('en-GB').split('/').reverse().join('-'); // yyyy-mm-dd
+}
 // Load table data for a specific date (yyyy-mm-dd)
 function loadTableForDate(dateStr) {
+    const statusIndicator = document.getElementById('status-indicator');
     // Try to load report for this date
     const report = getReportFromLocalStorage(dateStr);
-    if (Array.isArray(report)) {
+    if (Array.isArray(report) && report.length > 0) { // Check if report has data
         tableData = deepClone(report);
         customerCount = tableData.length;
         recalcAll();
         renderTable();
+        statusIndicator.textContent = ''; // Clear status
         return;
     }
-    // If not found, load customer list (default)
-    const names = getCustomerList();
+    // If not found or empty, clear the table and show message
     tableData = [];
     customerCount = 0;
-    for (const name of names) addCustomerRow(name);
-    recalcAll();
-    renderTable();
-}
-    const d = new Date();
-    return d.toLocaleDateString('en-GB').split('/').reverse().join('-'); // yyyy-mm-dd
+    renderTable(); // Render an empty table
+    statusIndicator.textContent = 'No records found for the selected date.'; // Show status
 }
 function formatDateForFile(dateStr) {
     const [yyyy, mm, dd] = dateStr.split('-');
@@ -95,6 +95,8 @@ function deepClone(obj) {
 // --- Table Rendering ---
 function renderTable() {
     const section = document.getElementById('table-section');
+    const statusIndicator = document.getElementById('status-indicator');
+    statusIndicator.textContent = ''; // Clear status on render
     let html = '<table id="main-table"><thead><tr>';
     for (const col of TABLE_COLUMNS) {
         // Add heading for view and delete columns
@@ -190,7 +192,6 @@ function attachInputListeners() {
             let val = input.value === '' ? 0 : +input.value;
             tableData[idx][key] = val;
             recalcRow(idx);
-            saveTableData();
             // No renderTable() here, so focus/cursor is preserved
         });
         // Select all text on focus (mouse or keyboard)
@@ -204,6 +205,7 @@ function attachInputListeners() {
         // Re-render table on blur (when user leaves the field)
         input.addEventListener('blur', e => {
             renderTable();
+            saveCurrentTableData(); // Persist change
         });
             // On Enter, move to next editable input and select its text
             input.addEventListener('keydown', e => {
@@ -236,7 +238,7 @@ function attachNameEditListeners() {
                 const newName = input.value.trim() || `Customer ${idx+1}`;
                 tableData[idx].name = newName;
                 saveCustomerList();
-                saveTableData();
+                saveCurrentTableData(); // Persist change
                 renderTable();
             };
         };
@@ -331,7 +333,7 @@ function attachDeleteListeners() {
                 tableData.splice(idx, 1);
                 customerCount = tableData.length;
                 saveCustomerList();
-                saveTableData();
+                saveCurrentTableData(); // Persist change
                 renderTable();
             }
         };
@@ -372,29 +374,10 @@ function addCustomerRow(name = '') {
     });
     customerCount++;
     saveCustomerList();
-    saveTableData();
     recalcAll();
     renderTable();
 }
 
-function initTable() {
-    // Try to load from localStorage
-    const saved = localStorage.getItem(TABLE_DATA_KEY);
-    if (saved) {
-        tableData = JSON.parse(saved);
-        customerCount = tableData.length;
-        recalcAll();
-        renderTable();
-        return;
-    }
-    // If not, load customer list
-    const names = getCustomerList();
-    tableData = [];
-    customerCount = 0;
-    for (const name of names) addCustomerRow(name);
-    recalcAll();
-    renderTable();
-}
 function saveCustomerList() {
     // Save only names
     const names = tableData.map(row => row.name);
@@ -404,12 +387,15 @@ function saveCustomerList() {
 function getCustomerList() {
     const saved = localStorage.getItem(CUSTOMER_LIST_KEY);
     if (saved) return JSON.parse(saved);
-    return DEFAULT_CUSTOMERS.slice();
+    return []; // Return an empty array instead of default customers
 }
 
-function saveTableData() {
-    localStorage.setItem(TABLE_DATA_KEY, JSON.stringify(tableData));
+function saveCurrentTableData() {
+    const calendarInput = document.getElementById('calendar-date');
+    const saveDate = calendarInput && calendarInput.value ? calendarInput.value : getTodayStr();
+    saveReportToLocalStorage(saveDate, deepClone(tableData));
 }
+
 function getAllCustomerHistory(name) {
     // Search all saved reports for this customer name
     const dates = getAllReportDates();
@@ -479,20 +465,13 @@ function renderReportList() {
     const pageDates = allDates.slice(startIdx, startIdx + REPORTS_PER_PAGE);
     for (const dateStr of pageDates) {
         const li = document.createElement('li');
+        li.setAttribute('data-date', dateStr);
         li.innerHTML = `
-            <span>${formatDateForFile(dateStr)}</span>
-            <span class="report-actions">
-                <button class="download-pdf-single animated-btn" data-date="${dateStr}" title="Download PDF" style="padding:6px 16px;border:none;background:#d7263d;color:#fff;border-radius:6px;display:flex;align-items:center;gap:8px;font-weight:600;font-size:1em;box-shadow:0 2px 8px #d7263d22;">
-                    <span style="display:inline-block;vertical-align:middle;">
-                        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <rect width="22" height="22" rx="5" fill="#d7263d"/>
-                            <path d="M7 7h8v8H7V7zm1 1v6h6V8H8zm2 2h2v2h-2v-2z" fill="#fff"/>
-                        </svg>
-                    </span>
-                    PDF
-                </button>
-                <button class="delete-report-btn" data-date="${dateStr}" title="Delete" style="margin-left:8px;">Delete</button>
-            </span>
+            <span style="font-weight: bold;">${formatDateForFile(dateStr)}</span>
+            <div class="report-actions">
+                <button class="download-pdf-single animated-btn" data-date="${dateStr}" title="Download PDF">PDF</button>
+                <button class="delete-report-btn" data-date="${dateStr}" title="Delete">Delete</button>
+            </div>
         `;
         ul.appendChild(li);
     }
@@ -526,6 +505,15 @@ function renderReportList() {
     };
 }
 function attachReportListListeners() {
+    document.querySelectorAll('#report-list li').forEach(li => {
+        li.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'BUTTON') {
+                const dateStr = li.getAttribute('data-date');
+                openCustomerListModal(dateStr);
+            }
+        });
+    });
+
     // Single PDF download button logic
     document.querySelectorAll('.download-pdf-single').forEach(btn => {
         btn.onclick = function(e) {
@@ -537,7 +525,8 @@ function attachReportListListeners() {
     });
     // Delete button
     document.querySelectorAll('.delete-report-btn').forEach(btn => {
-        btn.onclick = function() {
+        btn.onclick = function(e) {
+            e.stopPropagation();
             const dateStr = btn.dataset.date;
             if (confirm('Delete this report?')) {
                 deleteReportFromLocalStorage(dateStr);
@@ -545,6 +534,54 @@ function attachReportListListeners() {
             }
         };
     });
+}
+
+function openCustomerListModal(dateStr) {
+    const modal = document.getElementById('customer-list-modal');
+    const dateSpan = document.getElementById('customer-list-date');
+    const customerListUl = document.getElementById('customer-list-in-modal');
+    const report = getReportFromLocalStorage(dateStr);
+
+    dateSpan.textContent = formatDateForFile(dateStr);
+    customerListUl.innerHTML = '';
+
+    if (report) {
+        report.forEach(customer => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <span>${customer.name}</span>
+                <button class="download-single-customer" data-customer-name="${customer.name}" data-date="${dateStr}">Download</button>
+            `;
+            customerListUl.appendChild(li);
+        });
+    }
+
+    document.querySelectorAll('.download-single-customer').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const customerName = e.target.getAttribute('data-customer-name');
+            const date = e.target.getAttribute('data-date');
+            downloadSingleCustomerReport(customerName, date);
+        });
+    });
+
+    modal.style.display = 'flex';
+}
+
+function closeCustomerListModal() {
+    const modal = document.getElementById('customer-list-modal');
+    modal.style.display = 'none';
+}
+
+function downloadSingleCustomerReport(customerName, date) {
+    const report = getReportFromLocalStorage(date);
+    const customerData = report ? report.find(row => row.name === customerName) : null;
+
+    if (customerData) {
+        const dataToDownload = [customerData];
+        downloadPDF(dataToDownload, date, `${customerName}-report`);
+    } else {
+        alert('Could not find data for this customer.');
+    }
 }
 
 // --- Download Helpers ---
@@ -887,36 +924,26 @@ function attachModalListeners() {
         if (e.target === chartModal) closeChartModal();
         const editModal = document.getElementById('edit-modal');
         if (e.target === editModal) closeEditModal();
+        const customerListModal = document.getElementById('customer-list-modal');
+        if (e.target === customerListModal) closeCustomerListModal();
     };
     document.querySelector('.close-edit-modal').onclick = closeEditModal;
+    document.querySelector('.close-customer-list-modal').onclick = closeCustomerListModal;
     document.getElementById('search-customer-btn').addEventListener('click', searchCustomerData);
 }
 
 // --- Event Listeners ---
 document.addEventListener('DOMContentLoaded', function() {
-    initTable();
     renderReportList();
     attachModalListeners();
     document.getElementById('add-row').onclick = function() {
-        addCustomerRow();
+        const name = prompt('Enter customer name:');
+        if (name && name.trim() !== '') {
+            addCustomerRow(name.trim());
+        }
     };
     document.getElementById('edit-data').onclick = function() {
         openEditModal();
-    };
-    document.getElementById('submit').onclick = function() {
-        const today = getTodayStr();
-        recalcAll();
-        // Save for selected date, not just today
-        var calendarInput = document.getElementById('calendar-date');
-        var saveDate = calendarInput && calendarInput.value ? calendarInput.value : today;
-        // Save ALL table data (all rows, not just current page)
-        saveReportToLocalStorage(saveDate, deepClone(tableData));
-        renderReportList();
-        // If the saved date is currently selected, reload table for that date
-        if (calendarInput && calendarInput.value === saveDate) {
-            loadTableForDate(saveDate);
-        }
-        alert('Report saved! All table data for this date is now available in Saved Reports and can be exported as PDF.');
     };
     document.getElementById('submit').onclick = function() {
         const today = getTodayStr();
