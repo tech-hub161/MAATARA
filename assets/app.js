@@ -34,33 +34,6 @@ const CUSTOMER_LIST_KEY = 'maa-tara-customer-list';
 const TABLE_DATA_KEY = 'maa-tara-table-data';
 
 // --- Utility Functions ---
-// Show live date under heading
-window.addEventListener('DOMContentLoaded', function() {
-    var dateDiv = document.getElementById('live-date');
-    var calendarInput = document.getElementById('calendar-date');
-    function formatDisplayDate(date) {
-        var opts = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
-        return date.toLocaleDateString('en-GB', opts);
-    }
-    if (dateDiv && calendarInput) {
-        // Set input to today
-        var today = new Date();
-        calendarInput.value = today.toISOString().slice(0, 10);
-        let currentDayStr = getTodayStr(); // Use getTodayStr for consistency
-        dateDiv.textContent = formatDisplayDate(today);
-        // Load table/report for today on load
-        loadTableForDate(currentDayStr);
-        // On change, update display and table/report
-        calendarInput.addEventListener('change', function() {
-            var selected = calendarInput.value;
-            if (selected) {
-                var d = new Date(selected);
-                dateDiv.textContent = formatDisplayDate(d);
-                loadTableForDate(selected);
-            }
-        });
-    }
-});
 function getTodayStr() {
     const d = new Date();
     return d.toLocaleDateString('en-GB').split('/').reverse().join('-'); // yyyy-mm-dd
@@ -608,17 +581,19 @@ function tableDataToXLS(data, dateStr) {
         xls += '</tr>';
     }
     // Add Total row (all columns, matching web table)
-    xls += '<tr style="font-weight:bold;background:#f3f6fa;">';
-    TABLE_COLUMNS.forEach(col => {
-        if (col.key === 'name') {
-            xls += '<td style="text-align:left;">Total</td>';
-        } else if (totalFields.includes(col.key)) {
-            xls += `<td>${totals[col.key]}</td>`;
-        } else {
-            xls += '<td></td>';
-        }
-    });
-    xls += '</tr>';
+    if (data.length > 1) {
+        xls += '<tr style="font-weight:bold;background:#f3f6fa;">';
+        TABLE_COLUMNS.forEach(col => {
+            if (col.key === 'name') {
+                xls += '<td style="text-align:left;">Total</td>';
+            } else if (totalFields.includes(col.key)) {
+                xls += `<td>${totals[col.key]}</td>`;
+            } else {
+                xls += '<td></td>';
+            }
+        });
+        xls += '</tr>';
+    }
     xls += '</table>';
     return xls;
 }
@@ -737,260 +712,341 @@ function downloadCombinedPDF(reports, fromDate, toDate) {
     }
     win.document.write('</body></html>');
     win.document.close();
-    win.focus();
-    win.print();
-}
-
-// --- Download Option Dialog ---
-function showDownloadOptions(dateStr) {
-    const data = getReportFromLocalStorage(dateStr);
-    if (!data) return;
-    const opt = prompt('Download as: 1) Excel  2) PDF\nEnter 1 or 2:', '1');
-    if (opt === '2') downloadPDF(data, dateStr);
-    else downloadXLS(data, dateStr);
-}
-
-// --- Date Range Download ---
-function handleRangeDownload(type) {
-    const from = document.getElementById('from-date').value;
-    const to = document.getElementById('to-date').value;
-    if (!from || !to) return alert('Select both dates.');
-    const all = getAllReportDates();
-    const reports = all.filter(d => d >= from && d <= to).map(date => ({ date, data: getReportFromLocalStorage(date) }));
-    if (!reports.length) return alert('No reports in range.');
-    if (type === 'pdf') downloadCombinedPDF(reports, from, to);
-    else downloadCombinedXLS(reports, from, to);
-}
-
-// --- Chart Modal ---
-function openChartModal(idx) {
-    const modal = document.getElementById('chart-modal');
-    const canvas = document.getElementById('customer-chart');
-    const row = tableData[idx];
-    // Clear canvas
-    canvas.width = 350; canvas.height = 250;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    // Simple bar chart: Purchase, Return, SELL, Net Value, VC, Previous Due, TOTAL
-    const labels = ['Purchase','Return','SELL','Net Value','VC','Previous Due','TOTAL'];
-    const values = [row.purchase, row.return, row.sell, row.netValue, row.vc, row.prevDue, row.total];
-    const colors = ['#0078d7','#d7263d','#00b386','#fbb034','#a259f7','#ff6f61','#222'];
-    const max = Math.max(...values.map(v=>Math.abs(v)));
-    const barW = 32;
-    const gap = 18;
-    const baseY = 210;
-    ctx.font = '13px Segoe UI';
-    for (let i=0; i<values.length; ++i) {
-        const h = (values[i]/max)*120 || 0;
-        ctx.fillStyle = colors[i];
-        ctx.fillRect(30+i*(barW+gap), baseY-h, barW, h);
-        ctx.fillStyle = '#333';
-        ctx.fillText(labels[i], 30+i*(barW+gap), baseY+18);
-        ctx.fillText(values[i], 30+i*(barW+gap), baseY-h-8);
+        win.focus();
+        win.print();
     }
-    modal.style.display = 'flex';
-}
-function closeChartModal() {
-    document.getElementById('chart-modal').style.display = 'none';
-}
-
-function openEditModal() {
-    document.getElementById('edit-modal').style.display = 'flex';
-}
-
-function closeEditModal() {
-    document.getElementById('edit-modal').style.display = 'none';
-}
-
-function searchCustomerData() {
-    const customerName = document.getElementById('edit-customer-name').value.trim();
-    const searchDate = document.getElementById('edit-customer-date').value;
-    const resultsDiv = document.getElementById('edit-results');
-    resultsDiv.innerHTML = '';
-
-    if (!customerName) {
-        alert('Please enter a customer name.');
-        return;
-    }
-
-    if (customerName && !searchDate) {
-        // Search by name only
-        const dates = getAllReportDates().filter(date => {
-            const report = getReportFromLocalStorage(date);
-            return report && report.some(row => row.name.toLowerCase() === customerName.toLowerCase());
-        });
-
-        if (dates.length > 0) {
-            let html = '<p>Select a date to edit:</p><ul>';
-            dates.forEach(date => {
-                html += `<li><a href="#" class="edit-date-link" data-customer-name="${customerName}" data-date="${date}">${formatDateForFile(date)}</a></li>`;
-            });
-            html += '</ul>';
-            resultsDiv.innerHTML = html;
-
-            document.querySelectorAll('.edit-date-link').forEach(link => {
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const name = e.target.getAttribute('data-customer-name');
-                    const date = e.target.getAttribute('data-date');
-                    displayCustomerDataTable(name, date);
-                });
-            });
-        } else {
-            resultsDiv.innerHTML = '<p>No records found for this customer.</p>';
+    
+    function downloadCustomerReportPDF(customerName, reports, fromDate, toDate) {
+        const win = window.open('', '', 'width=900,height=700');
+        win.document.write('<html><head><title>PDF Export</title>');
+        win.document.write('<style>body{font-family:sans-serif;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #888;padding:8px;text-align:center;}th{background:#eaf1fb;}h3{margin:18px 0 6px 0;}</style>');
+        win.document.write('</head><body>');
+        win.document.write(`<h2>Report for ${customerName}<br>From ${formatDateForFile(fromDate)} To ${formatDateForFile(toDate)}</h2>`);
+    
+        for (const { date, data } of reports) {
+            win.document.write(`<h3>Date: ${formatDateForFile(date)}</h3>`);
+            win.document.write(tableDataToXLS([data], date));
         }
-    } else if (customerName && searchDate) {
-        // Search by name and date
-        displayCustomerDataTable(customerName, searchDate);
+    
+        win.document.write('</body></html>');
+        win.document.close();
+        win.focus();
+        win.print();
     }
-}
-
-function displayCustomerDataTable(customerName, date) {
-    const report = getReportFromLocalStorage(date);
-    const customerData = report ? report.find(row => row.name.toLowerCase() === customerName.toLowerCase()) : null;
-    const resultsDiv = document.getElementById('edit-results');
-
-    if (customerData) {
-        let html = `
-            <p>Editing data for ${customerName} on ${formatDateForFile(date)}</p>
-            <table id="edit-customer-table">
-                <thead>
-                    <tr>
-                        <th>Field</th>
-                        <th>Value</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-        TABLE_COLUMNS.forEach(col => {
-            if (col.editable) {
-                html += `
-                    <tr>
-                        <td>${col.label}</td>
-                        <td><input type="number" id="edit-${col.key}" value="${customerData[col.key] || 0}"></td>
-                    </tr>
-                `;
-            }
-        });
-        html += `
-                </tbody>
-            </table>
-            <button id="save-customer-changes" data-customer-name="${customerName}" data-date="${date}">Save</button>
-        `;
-        resultsDiv.innerHTML = html;
-
-        document.getElementById('save-customer-changes').addEventListener('click', saveCustomerChanges);
-    } else {
-        resultsDiv.innerHTML = '<p>No data found for the selected criteria.</p>';
-    }
-}
-
-function saveCustomerChanges(e) {
-    const customerName = e.target.getAttribute('data-customer-name');
-    const date = e.target.getAttribute('data-date');
-    const report = getReportFromLocalStorage(date);
-
-    if (report) {
-        const customerIndex = report.findIndex(row => row.name.toLowerCase() === customerName.toLowerCase());
-        if (customerIndex !== -1) {
-            TABLE_COLUMNS.forEach(col => {
-                if (col.editable) {
-                    const input = document.getElementById(`edit-${col.key}`);
-                    if (input) {
-                        report[customerIndex][col.key] = parseFloat(input.value) || 0;
+    
+    function downloadSingleCustomerCombinedReport() {
+        const customerName = document.getElementById('customer-name-for-report').value.trim();
+        const fromDate = document.getElementById('customer-from-date').value;
+        const toDate = document.getElementById('customer-to-date').value;
+    
+        if (!customerName || !fromDate || !toDate) {
+            alert('Please enter a customer name and select both start and end dates.');
+            return;
+        }
+    
+        const allDates = getAllReportDates();
+        const reports = [];
+        for (const date of allDates) {
+            if (date >= fromDate && date <= toDate) {
+                const report = getReportFromLocalStorage(date);
+                if (report) {
+                    const customerData = report.find(row => row.name.toLowerCase() === customerName.toLowerCase());
+                    if (customerData) {
+                        reports.push({ date, data: customerData });
                     }
                 }
-            });
-
-            // Recalculate derived fields
-            const row = report[customerIndex];
-            const purchaseSum = (row.purchase || 0) + (row.booking || 0);
-            row.sell = purchaseSum - (row.return || 0);
-            row.netValue = row.sell * (row.rate || 0);
-            let totalBeforePaid = (row.netValue - (row.vc || 0)) + (row.prevDue || 0);
-            row.total = totalBeforePaid - (row.paidInAC || 0);
-
-            saveReportToLocalStorage(date, report);
-            alert('Customer data updated successfully!');
-            closeEditModal();
+            }
+        }
+    
+        if (reports.length > 0) {
+            downloadCustomerReportPDF(customerName, reports, fromDate, toDate);
+        } else {
+            alert('No data found for this customer in the selected date range.');
         }
     }
-}
-
-function attachModalListeners() {
-    document.querySelector('.modal .close').onclick = closeChartModal;
-    window.onclick = function(e) {
-        const chartModal = document.getElementById('chart-modal');
-        if (e.target === chartModal) closeChartModal();
-        const editModal = document.getElementById('edit-modal');
-        if (e.target === editModal) closeEditModal();
-        const customerListModal = document.getElementById('customer-list-modal');
-        if (e.target === customerListModal) closeCustomerListModal();
-    };
-    document.querySelector('.close-edit-modal').onclick = closeEditModal;
-    document.querySelector('.close-customer-list-modal').onclick = closeCustomerListModal;
-    document.getElementById('search-customer-btn').addEventListener('click', searchCustomerData);
-}
-
-// --- Event Listeners ---
-document.addEventListener('DOMContentLoaded', function() {
-    renderReportList();
-    attachModalListeners();
-    document.getElementById('add-row').onclick = function() {
-        const name = prompt('Enter customer name:');
-        if (name && name.trim() !== '') {
-            addCustomerRow(name.trim());
+    
+    // --- Download Option Dialog ---
+    function showDownloadOptions(dateStr) {
+        const data = getReportFromLocalStorage(dateStr);
+        if (!data) return;
+        const opt = prompt('Download as: 1) Excel  2) PDF\nEnter 1 or 2:', '1');
+        if (opt === '2') downloadPDF(data, dateStr);
+        else downloadXLS(data, dateStr);
+    }
+    
+    // --- Date Range Download ---
+    function handleRangeDownload(type) {
+        const from = document.getElementById('from-date').value;
+        const to = document.getElementById('to-date').value;
+        if (!from || !to) return alert('Select both dates.');
+        const all = getAllReportDates();
+        const reports = all.filter(d => d >= from && d <= to).map(date => ({ date, data: getReportFromLocalStorage(date) }));
+        if (!reports.length) return alert('No reports in range.');
+        if (type === 'pdf') downloadCombinedPDF(reports, from, to);
+        else downloadCombinedXLS(reports, from, to);
+    }
+    
+    // --- Chart Modal ---
+    function openChartModal(idx) {
+        const modal = document.getElementById('chart-modal');
+        const canvas = document.getElementById('customer-chart');
+        const row = tableData[idx];
+        // Clear canvas
+        canvas.width = 350; canvas.height = 250;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        // Simple bar chart: Purchase, Return, SELL, Net Value, VC, Previous Due, TOTAL
+        const labels = ['Purchase','Return','SELL','Net Value','VC','Previous Due','TOTAL'];
+        const values = [row.purchase, row.return, row.sell, row.netValue, row.vc, row.prevDue, row.total];
+        const colors = ['#0078d7','#d7263d','#00b386','#fbb034','#a259f7','#ff6f61','#222'];
+        const max = Math.max(...values.map(v=>Math.abs(v)));
+        const barW = 32;
+        const gap = 18;
+        const baseY = 210;
+        ctx.font = '13px Segoe UI';
+        for (let i=0; i<values.length; ++i) {
+            const h = (values[i]/max)*120 || 0;
+            ctx.fillStyle = colors[i];
+            ctx.fillRect(30+i*(barW+gap), baseY-h, barW, h);
+            ctx.fillStyle = '#333';
+            ctx.fillText(labels[i], 30+i*(barW+gap), baseY+18);
+            ctx.fillText(values[i], 30+i*(barW+gap), baseY-h-8);
         }
-    };
-    document.getElementById('edit-data').onclick = function() {
-        openEditModal();
-    };
-    document.getElementById('submit').onclick = function() {
-        const today = getTodayStr();
-        recalcAll();
-        // Save for selected date, not just today
+        modal.style.display = 'flex';
+    }
+    function closeChartModal() {
+        document.getElementById('chart-modal').style.display = 'none';
+    }
+    
+    function openEditModal() {
+        document.getElementById('edit-modal').style.display = 'flex';
+    }
+    
+    function closeEditModal() {
+        document.getElementById('edit-modal').style.display = 'none';
+    }
+    
+    function searchCustomerData() {
+        const customerName = document.getElementById('edit-customer-name').value.trim();
+        const searchDate = document.getElementById('edit-customer-date').value;
+        const resultsDiv = document.getElementById('edit-results');
+        resultsDiv.innerHTML = '';
+    
+        if (!customerName) {
+            alert('Please enter a customer name.');
+            return;
+        }
+    
+        if (customerName && !searchDate) {
+            // Search by name only
+            const dates = getAllReportDates().filter(date => {
+                const report = getReportFromLocalStorage(date);
+                return report && report.some(row => row.name.toLowerCase() === customerName.toLowerCase());
+            });
+    
+            if (dates.length > 0) {
+                let html = '<p>Select a date to edit:</p><ul>';
+                dates.forEach(date => {
+                    html += `<li><a href="#" class="edit-date-link" data-customer-name="${customerName}" data-date="${date}">${formatDateForFile(date)}</a></li>`;
+                });
+                html += '</ul>';
+                resultsDiv.innerHTML = html;
+    
+                document.querySelectorAll('.edit-date-link').forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const name = e.target.getAttribute('data-customer-name');
+                        const date = e.target.getAttribute('data-date');
+                        displayCustomerDataTable(name, date);
+                    });
+                });
+            } else {
+                resultsDiv.innerHTML = '<p>No records found for this customer.</p>';
+            }
+        } else if (customerName && searchDate) {
+            // Search by name and date
+            displayCustomerDataTable(customerName, searchDate);
+        }
+    }
+    
+    function displayCustomerDataTable(customerName, date) {
+        const report = getReportFromLocalStorage(date);
+        const customerData = report ? report.find(row => row.name.toLowerCase() === customerName.toLowerCase()) : null;
+        const resultsDiv = document.getElementById('edit-results');
+    
+        if (customerData) {
+            let html = `
+                <p>Editing data for ${customerName} on ${formatDateForFile(date)}</p>
+                <table id="edit-customer-table">
+                    <thead>
+                        <tr>
+                            <th>Field</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            TABLE_COLUMNS.forEach(col => {
+                if (col.editable) {
+                    html += `
+                        <tr>
+                            <td>${col.label}</td>
+                            <td><input type="number" id="edit-${col.key}" value="${customerData[col.key] || 0}"></td>
+                        </tr>
+                    `;
+                }
+            });
+            html += `
+                    </tbody>
+                </table>
+                <button id="save-customer-changes" data-customer-name="${customerName}" data-date="${date}">Save</button>
+            `;
+            resultsDiv.innerHTML = html;
+    
+            document.getElementById('save-customer-changes').addEventListener('click', saveCustomerChanges);
+        } else {
+            resultsDiv.innerHTML = '<p>No data found for the selected criteria.</p>';
+        }
+    }
+    
+    function saveCustomerChanges(e) {
+        const customerName = e.target.getAttribute('data-customer-name');
+        const date = e.target.getAttribute('data-date');
+        const report = getReportFromLocalStorage(date);
+    
+        if (report) {
+            const customerIndex = report.findIndex(row => row.name.toLowerCase() === customerName.toLowerCase());
+            if (customerIndex !== -1) {
+                TABLE_COLUMNS.forEach(col => {
+                    if (col.editable) {
+                        const input = document.getElementById(`edit-${col.key}`);
+                        if (input) {
+                            report[customerIndex][col.key] = parseFloat(input.value) || 0;
+                        }
+                    }
+                });
+    
+                // Recalculate derived fields
+                const row = report[customerIndex];
+                const purchaseSum = (row.purchase || 0) + (row.booking || 0);
+                row.sell = purchaseSum - (row.return || 0);
+                row.netValue = row.sell * (row.rate || 0);
+                let totalBeforePaid = (row.netValue - (row.vc || 0)) + (row.prevDue || 0);
+                row.total = totalBeforePaid - (row.paidInAC || 0);
+    
+                saveReportToLocalStorage(date, report);
+                alert('Customer data updated successfully!');
+                closeEditModal();
+            }
+        }
+    }
+    
+    function attachModalListeners() {
+        document.querySelector('.modal .close').onclick = closeChartModal;
+        window.onclick = function(e) {
+            const chartModal = document.getElementById('chart-modal');
+            if (e.target === chartModal) closeChartModal();
+            const editModal = document.getElementById('edit-modal');
+            if (e.target === editModal) closeEditModal();
+            const customerListModal = document.getElementById('customer-list-modal');
+            if (e.target === customerListModal) closeCustomerListModal();
+        };
+        document.querySelector('.close-edit-modal').onclick = closeEditModal;
+        document.querySelector('.close-customer-list-modal').onclick = closeCustomerListModal;
+        document.getElementById('search-customer-btn').addEventListener('click', searchCustomerData);
+    }
+    
+    // --- Event Listeners ---
+    document.addEventListener('DOMContentLoaded', function() {
+        var dateDiv = document.getElementById('live-date');
         var calendarInput = document.getElementById('calendar-date');
-        var saveDate = calendarInput && calendarInput.value ? calendarInput.value : today;
-        // Save ALL table data (all rows, not just current page)
-        saveReportToLocalStorage(saveDate, deepClone(tableData));
+        function formatDisplayDate(date) {
+            var opts = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+            return date.toLocaleDateString('en-GB', opts);
+        }
+        if (dateDiv && calendarInput) {
+            const allDates = getAllReportDates();
+            let dateToLoad;
+            if (allDates.length > 0) {
+                dateToLoad = allDates[0]; // Get the latest date
+            } else {
+                dateToLoad = getTodayStr(); // Default to today if no reports
+            }
+    
+            const dateObj = new Date(dateToLoad);
+            calendarInput.value = dateToLoad;
+            dateDiv.textContent = formatDisplayDate(dateObj);
+            loadTableForDate(dateToLoad);
+    
+            // On change, update display and table/report
+            calendarInput.addEventListener('change', function() {
+                var selected = calendarInput.value;
+                if (selected) {
+                    var d = new Date(selected);
+                    dateDiv.textContent = formatDisplayDate(d);
+                    loadTableForDate(selected);
+                }
+            });
+        }
+    
         renderReportList();
-        // If the saved date is currently selected, reload table for that date
-        if (calendarInput && calendarInput.value === saveDate) {
-            loadTableForDate(saveDate);
-        }
-        alert('Report saved! All table data for this date is now available in Saved Reports and can be exported as PDF.');
-    };
-    document.getElementById('clear-reports').onclick = function() {
-        if (confirm('Delete ALL reports?')) {
-            clearAllReports();
+        attachModalListeners();
+        document.getElementById('add-row').onclick = function() {
+            const name = prompt('Enter customer name:');
+            if (name && name.trim() !== '') {
+                addCustomerRow(name.trim());
+            }
+        };        document.getElementById('edit-data').onclick = function() {
+            openEditModal();
+        };
+        document.getElementById('submit').onclick = function() {
+            const today = getTodayStr();
+            recalcAll();
+            // Save for selected date, not just today
+            var calendarInput = document.getElementById('calendar-date');
+            var saveDate = calendarInput && calendarInput.value ? calendarInput.value : today;
+            // Save ALL table data (all rows, not just current page)
+            saveReportToLocalStorage(saveDate, deepClone(tableData));
             renderReportList();
-        }
-    };
-    // Dropdown logic for Download Range
-    const rangeBtn = document.getElementById('download-range');
-    const dropdown = document.getElementById('download-range-dropdown');
-    rangeBtn.onclick = function(e) {
-        e.stopPropagation();
-        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
-    };
-    document.querySelectorAll('.download-range-pdf').forEach(btn => {
-        btn.onclick = function(e) {
-            e.stopPropagation();
-            dropdown.style.display = 'none';
-            handleRangeDownload('pdf');
+            // If the saved date is currently selected, reload table for that date
+            if (calendarInput && calendarInput.value === saveDate) {
+                loadTableForDate(saveDate);
+            }
+            alert('Report saved! All table data for this date is now available in Saved Reports and can be exported as PDF.');
         };
-    });
-    document.querySelectorAll('.download-range-xls').forEach(btn => {
-        btn.onclick = function(e) {
-            e.stopPropagation();
-            dropdown.style.display = 'none';
-            handleRangeDownload('xls');
+        document.getElementById('clear-reports').onclick = function() {
+            if (confirm('Delete ALL reports?')) {
+                clearAllReports();
+                renderReportList();
+            }
         };
+        // Dropdown logic for Download Range
+        const rangeBtn = document.getElementById('download-range');
+        const dropdown = document.getElementById('download-range-dropdown');
+        rangeBtn.onclick = function(e) {
+            e.stopPropagation();
+            dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+        };
+        document.querySelectorAll('.download-range-pdf').forEach(btn => {
+            btn.onclick = function(e) {
+                e.stopPropagation();
+                dropdown.style.display = 'none';
+                handleRangeDownload('pdf');
+            };
+        });
+        document.querySelectorAll('.download-range-xls').forEach(btn => {
+            btn.onclick = function(e) {
+                e.stopPropagation();
+                dropdown.style.display = 'none';
+                handleRangeDownload('xls');
+            };
+        });
+        // Hide dropdown on click outside
+        document.addEventListener('click', function(e) {
+            if (!dropdown.contains(e.target) && e.target !== rangeBtn) {
+                dropdown.style.display = 'none';
+            }
+        });
+    
+        document.getElementById('download-customer-report').addEventListener('click', downloadSingleCustomerCombinedReport);
     });
-    // Hide dropdown on click outside
-    document.addEventListener('click', function(e) {
-        if (!dropdown.contains(e.target) && e.target !== rangeBtn) {
-            dropdown.style.display = 'none';
-        }
-    });
-});

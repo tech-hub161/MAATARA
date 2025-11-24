@@ -311,6 +311,37 @@ input.name-input:not([readonly]) {
     box-shadow: 0 4px 16px #0002;
     background: #f7f7f7;
 }
+
+.customer-date-range-download-section {
+    margin-top: 32px;
+    background: #f5f8fc;
+    border-radius: 10px;
+    padding: 18px 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.customer-date-range-title {
+    margin-bottom: 8px;
+    margin-top: 0;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #0078d7;
+}
+
+.customer-date-range-description {
+    margin-bottom: 6px;
+    font-size: 0.98em;
+    color: #444;
+}
+
+#download-customer-report {
+    background: #d7263d;
+}
+
+#download-customer-report:hover {
+    background: #ff6a00;
+}
+
 /* Animated gradient color for heading */
 .animated-heading {
     background: linear-gradient(90deg, #8e2de2, #ff6a00, #43cea2, #185a9d, #8e2de2);
