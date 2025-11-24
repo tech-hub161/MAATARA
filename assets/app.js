@@ -756,12 +756,140 @@ function openChartModal(idx) {
 function closeChartModal() {
     document.getElementById('chart-modal').style.display = 'none';
 }
+
+function openEditModal() {
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function closeEditModal() {
+    document.getElementById('edit-modal').style.display = 'none';
+}
+
+function searchCustomerData() {
+    const customerName = document.getElementById('edit-customer-name').value.trim();
+    const searchDate = document.getElementById('edit-customer-date').value;
+    const resultsDiv = document.getElementById('edit-results');
+    resultsDiv.innerHTML = '';
+
+    if (!customerName) {
+        alert('Please enter a customer name.');
+        return;
+    }
+
+    if (customerName && !searchDate) {
+        // Search by name only
+        const dates = getAllReportDates().filter(date => {
+            const report = getReportFromLocalStorage(date);
+            return report && report.some(row => row.name.toLowerCase() === customerName.toLowerCase());
+        });
+
+        if (dates.length > 0) {
+            let html = '<p>Select a date to edit:</p><ul>';
+            dates.forEach(date => {
+                html += `<li><a href="#" class="edit-date-link" data-customer-name="${customerName}" data-date="${date}">${formatDateForFile(date)}</a></li>`;
+            });
+            html += '</ul>';
+            resultsDiv.innerHTML = html;
+
+            document.querySelectorAll('.edit-date-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const name = e.target.getAttribute('data-customer-name');
+                    const date = e.target.getAttribute('data-date');
+                    displayCustomerDataTable(name, date);
+                });
+            });
+        } else {
+            resultsDiv.innerHTML = '<p>No records found for this customer.</p>';
+        }
+    } else if (customerName && searchDate) {
+        // Search by name and date
+        displayCustomerDataTable(customerName, searchDate);
+    }
+}
+
+function displayCustomerDataTable(customerName, date) {
+    const report = getReportFromLocalStorage(date);
+    const customerData = report ? report.find(row => row.name.toLowerCase() === customerName.toLowerCase()) : null;
+    const resultsDiv = document.getElementById('edit-results');
+
+    if (customerData) {
+        let html = `
+            <p>Editing data for ${customerName} on ${formatDateForFile(date)}</p>
+            <table id="edit-customer-table">
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        TABLE_COLUMNS.forEach(col => {
+            if (col.editable) {
+                html += `
+                    <tr>
+                        <td>${col.label}</td>
+                        <td><input type="number" id="edit-${col.key}" value="${customerData[col.key] || 0}"></td>
+                    </tr>
+                `;
+            }
+        });
+        html += `
+                </tbody>
+            </table>
+            <button id="save-customer-changes" data-customer-name="${customerName}" data-date="${date}">Save</button>
+        `;
+        resultsDiv.innerHTML = html;
+
+        document.getElementById('save-customer-changes').addEventListener('click', saveCustomerChanges);
+    } else {
+        resultsDiv.innerHTML = '<p>No data found for the selected criteria.</p>';
+    }
+}
+
+function saveCustomerChanges(e) {
+    const customerName = e.target.getAttribute('data-customer-name');
+    const date = e.target.getAttribute('data-date');
+    const report = getReportFromLocalStorage(date);
+
+    if (report) {
+        const customerIndex = report.findIndex(row => row.name.toLowerCase() === customerName.toLowerCase());
+        if (customerIndex !== -1) {
+            TABLE_COLUMNS.forEach(col => {
+                if (col.editable) {
+                    const input = document.getElementById(`edit-${col.key}`);
+                    if (input) {
+                        report[customerIndex][col.key] = parseFloat(input.value) || 0;
+                    }
+                }
+            });
+
+            // Recalculate derived fields
+            const row = report[customerIndex];
+            const purchaseSum = (row.purchase || 0) + (row.booking || 0);
+            row.sell = purchaseSum - (row.return || 0);
+            row.netValue = row.sell * (row.rate || 0);
+            let totalBeforePaid = (row.netValue - (row.vc || 0)) + (row.prevDue || 0);
+            row.total = totalBeforePaid - (row.paidInAC || 0);
+
+            saveReportToLocalStorage(date, report);
+            alert('Customer data updated successfully!');
+            closeEditModal();
+        }
+    }
+}
+
 function attachModalListeners() {
     document.querySelector('.modal .close').onclick = closeChartModal;
     window.onclick = function(e) {
-        const modal = document.getElementById('chart-modal');
-        if (e.target === modal) closeChartModal();
+        const chartModal = document.getElementById('chart-modal');
+        if (e.target === chartModal) closeChartModal();
+        const editModal = document.getElementById('edit-modal');
+        if (e.target === editModal) closeEditModal();
     };
+    document.querySelector('.close-edit-modal').onclick = closeEditModal;
+    document.getElementById('search-customer-btn').addEventListener('click', searchCustomerData);
 }
 
 // --- Event Listeners ---
@@ -771,6 +899,24 @@ document.addEventListener('DOMContentLoaded', function() {
     attachModalListeners();
     document.getElementById('add-row').onclick = function() {
         addCustomerRow();
+    };
+    document.getElementById('edit-data').onclick = function() {
+        openEditModal();
+    };
+    document.getElementById('submit').onclick = function() {
+        const today = getTodayStr();
+        recalcAll();
+        // Save for selected date, not just today
+        var calendarInput = document.getElementById('calendar-date');
+        var saveDate = calendarInput && calendarInput.value ? calendarInput.value : today;
+        // Save ALL table data (all rows, not just current page)
+        saveReportToLocalStorage(saveDate, deepClone(tableData));
+        renderReportList();
+        // If the saved date is currently selected, reload table for that date
+        if (calendarInput && calendarInput.value === saveDate) {
+            loadTableForDate(saveDate);
+        }
+        alert('Report saved! All table data for this date is now available in Saved Reports and can be exported as PDF.');
     };
     document.getElementById('submit').onclick = function() {
         const today = getTodayStr();

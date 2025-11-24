@@ -230,6 +230,30 @@ input.name-input:not([readonly]) {
     color: #d7263d;
     cursor: pointer;
 }
+
+#edit-modal .modal-content {
+    max-width: 600px;
+}
+
+.close-edit-modal {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.edit-search-form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+#edit-results table {
+    width: 100%;
+}
+
 /* Animation for PDF/Excel download buttons */
 .animated-btn {
     transition: transform 0.15s cubic-bezier(.4,2,.6,1), box-shadow 0.15s;
