@@ -16,6 +16,7 @@ const TABLE_COLUMNS = [
     { key: 'rate', label: 'Rate/PCS', editable: true },
     { key: 'netValue', label: 'NET VALUE', editable: false },
     { key: 'vc', label: 'VC', editable: true },
+    { key: 'bookingPWT', label: 'Booking <br> PWT', editable: true },
     { key: 'prevDue', label: 'Previous Due', editable: true },
     { key: 'paidInAC', label: 'Paid in A/C', editable: true },
     { key: 'total', label: 'TOTAL', editable: false },
@@ -263,6 +264,7 @@ function attachViewListeners() {
                     { label: 'Rate/PCS', value: entry.rate },
                     { label: 'NET VALUE', value: entry.netValue !== undefined ? Math.round(entry.netValue) : '' },
                     { label: 'VC', value: entry.vc },
+                    { label: 'Booking PWT', value: entry.bookingPWT !== undefined ? entry.bookingPWT : '' },
                     { label: 'Previous Due', value: entry.prevDue },
                     { label: 'Paid in A/C', value: entry.paidInAC !== undefined ? entry.paidInAC : '' },
                     { label: 'TOTAL', value: entry.total !== undefined ? Math.round(entry.total) : '' }
@@ -319,10 +321,8 @@ function recalcRow(idx) {
     const purchaseSum = (row.purchase || 0) + (row.booking || 0);
     row.sell = purchaseSum - (row.return || 0);
     row.netValue = row.sell * (row.rate || 0);
-    // Calculate total before Paid in A/C
-    let totalBeforePaid = (row.netValue - (row.vc || 0)) + (row.prevDue || 0);
-    // Subtract Paid in A/C if present
-    row.total = totalBeforePaid - (row.paidInAC || 0);
+    // Calculate total based on new logic: (NET VALUE + Previous Due) - (VC + BookingPWT + Paid in A/C)
+    row.total = (row.netValue || 0) + (row.prevDue || 0) - ((row.vc || 0) + (row.bookingPWT || 0) + (row.paidInAC || 0));
 }
 
 function recalcAll() {
@@ -341,6 +341,7 @@ function addCustomerRow(name = '') {
         rate: 0,
         netValue: 0,
         vc: 0,
+        bookingPWT: 0,
         prevDue: 0,
         paidInAC: 0,
         total: 0
@@ -565,7 +566,7 @@ function tableDataToXLS(data, dateStr) {
     }
     xls += '</tr>';
     // Calculate totals for all columns that appear in the Total row on the web table
-    const totalFields = ['purchase', 'booking', 'return', 'sell', 'rate', 'netValue', 'vc', 'prevDue', 'paidInAC', 'total'];
+    const totalFields = ['purchase', 'booking', 'return', 'sell', 'rate', 'netValue', 'vc', 'bookingPWT', 'prevDue', 'paidInAC', 'total'];
     const totals = {};
     totalFields.forEach(field => {
         totals[field] = data.reduce((sum, row) => sum + (Number(row[field]) || 0), 0);
@@ -575,7 +576,7 @@ function tableDataToXLS(data, dateStr) {
         xls += '<tr>';
         for (const col of TABLE_COLUMNS) {
             let val = row[col.key] !== undefined ? row[col.key] : '';
-            if (col.key === 'netValue' || col.key === 'total' || col.key === 'purchase' || col.key === 'booking' || col.key === 'return' || col.key === 'sell' || col.key === 'rate' || col.key === 'vc' || col.key === 'prevDue' || col.key === 'paidInAC') val = val !== '' ? Math.round(val) : '';
+            if (col.key === 'netValue' || col.key === 'total' || col.key === 'purchase' || col.key === 'booking' || col.key === 'return' || col.key === 'sell' || col.key === 'rate' || col.key === 'vc' || col.key === 'bookingPWT' || col.key === 'prevDue' || col.key === 'paidInAC') val = val !== '' ? Math.round(val) : '';
             xls += `<td>${val}</td>`;
         }
         xls += '</tr>';
@@ -650,7 +651,7 @@ function downloadCombinedPDF(reports, fromDate, toDate) {
     // Prepare summary for each date
     let summaryRows = [];
     // All columns to show in summary (matching Total row)
-    const totalFields = ['purchase', 'booking', 'return', 'sell', 'rate', 'netValue', 'vc', 'prevDue', 'paidInAC', 'total'];
+    const totalFields = ['purchase', 'booking', 'return', 'sell', 'rate', 'netValue', 'vc', 'bookingPWT', 'prevDue', 'paidInAC', 'total'];
     let sumTotals = {};
     totalFields.forEach(f => sumTotals[f] = 0);
     for (const { date, data } of reports) {
@@ -674,7 +675,7 @@ function downloadCombinedPDF(reports, fromDate, toDate) {
     win.document.write(`<h2>Daily Business Snapshot<br>From ${formatDateForFile(fromDate)} To ${formatDateForFile(toDate)}</h2>`);
     // Summary table
     win.document.write('<h3>Summary of Total Row Values (Each Date)</h3>');
-    win.document.write('<table class="summary-table"><thead><tr><th>Date</th><th>Purchase</th><th>Booking</th><th>Return</th><th>SELL</th><th>Rate/PCS</th><th>NET VALUE</th><th>VC</th><th>Previous Due</th><th>Paid in A/C</th><th>TOTAL</th></tr></thead><tbody>');
+    win.document.write('<table class="summary-table"><thead><tr><th>Date</th><th>Purchase</th><th>Booking</th><th>Return</th><th>SELL</th><th>Rate/PCS</th><th>NET VALUE</th><th>VC</th><th>Booking PWT</th><th>Previous Due</th><th>Paid in A/C</th><th>TOTAL</th></tr></thead><tbody>');
     for (const row of summaryRows) {
         win.document.write('<tr>');
         win.document.write('<td>' + formatDateForFile(row.date) + '</td>');
@@ -685,6 +686,7 @@ function downloadCombinedPDF(reports, fromDate, toDate) {
         win.document.write('<td>' + row.totals.rate + '</td>');
         win.document.write('<td>' + row.totals.netValue + '</td>');
         win.document.write('<td>' + row.totals.vc + '</td>');
+        win.document.write('<td>' + row.totals.bookingPWT + '</td>');
         win.document.write('<td>' + row.totals.prevDue + '</td>');
         win.document.write('<td>' + row.totals.paidInAC + '</td>');
         win.document.write('<td>' + row.totals.total + '</td>');
@@ -700,6 +702,7 @@ function downloadCombinedPDF(reports, fromDate, toDate) {
     win.document.write('<td>' + sumTotals.rate + '</td>');
     win.document.write('<td>' + sumTotals.netValue + '</td>');
     win.document.write('<td>' + sumTotals.vc + '</td>');
+    win.document.write('<td>' + sumTotals.bookingPWT + '</td>');
     win.document.write('<td>' + sumTotals.prevDue + '</td>');
     win.document.write('<td>' + sumTotals.paidInAC + '</td>');
     win.document.write('<td>' + sumTotals.total + '</td>');
@@ -977,6 +980,7 @@ function downloadCombinedPDF(reports, fromDate, toDate) {
             calendarInput.value = dateToLoad;
             dateDiv.textContent = formatDisplayDate(dateObj);
             loadTableForDate(dateToLoad);
+            console.log('Date to load:', dateToLoad);
     
             // On change, update display and table/report
             calendarInput.addEventListener('change', function() {
