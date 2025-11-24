@@ -16,6 +16,7 @@
         <input type="date" id="calendar-date" style="padding:4px 8px;font-size:1em;border-radius:6px;border:1px solid #bfc9d9;" />
     </div>
     <div id="table-section"></div>
+    <div id="status-indicator"></div>
         <div class="actions">
             <button id="add-row">ADD</button>
             <button id="edit-data">Edit</button>
@@ -71,12 +72,21 @@
             </div>
         </div>
     </div>
-    <div id="chart-modal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <canvas id="customer-chart"></canvas>
+        <div id="chart-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <canvas id="customer-chart"></canvas>
+            </div>
         </div>
-    </div>
+
+        <div id="customer-list-modal" class="modal">
+            <div class="modal-content">
+                <span class="close-customer-list-modal">&times;</span>
+                <h2>Customers for <span id="customer-list-date"></span></h2>
+                <ul id="customer-list-in-modal"></ul>
+            </div>
+        </div>
+
     <script src="assets/app.js"></script>
 </body>
 </html>
