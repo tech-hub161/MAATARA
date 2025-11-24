@@ -28,7 +28,7 @@ body {
     animation: marquee-rgb-blink 1.2s infinite alternate;
 }
 .container {
-    max-width: 1500px;
+    max-width: 1620px;
     margin: 30px auto;
     background: #fff;
     border-radius: 18px;
@@ -418,3 +418,4 @@ input.name-input:not([readonly]) {
     font-size: 0.93em;
   }
 }
+
