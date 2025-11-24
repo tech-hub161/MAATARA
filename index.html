@@ -87,6 +87,18 @@
             </div>
         </div>
 
+        <div class="customer-date-range-download-section">
+            <h3 class="customer-date-range-title">Download Report for a Single Customer</h3>
+            <div class="customer-date-range-description">Enter customer name and select a date range to download a combined report.</div>
+            <div class="customer-date-range-download">
+                <input type="text" id="customer-name-for-report" placeholder="Customer Name" style="padding: 4px 8px; font-size: 1em; border-radius: 6px; border: 1px solid #bfc9d9; margin-right: 10px;">
+                <label>From: <input type="date" id="customer-from-date"></label>
+                <label>To: <input type="date" id="customer-to-date"></label>
+                <button id="download-customer-report" type="button">Download PDF</button>
+            </div>
+        </div>
+    </div>
+
     <script src="assets/app.js"></script>
 </body>
 </html>
