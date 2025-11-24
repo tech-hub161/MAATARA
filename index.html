@@ -18,8 +18,23 @@
     <div id="table-section"></div>
         <div class="actions">
             <button id="add-row">ADD</button>
+            <button id="edit-data">Edit</button>
             <button id="submit">Submit</button>
         </div>
+
+        <div id="edit-modal" class="modal">
+            <div class="modal-content">
+                <span class="close-edit-modal">&times;</span>
+                <h2>Edit Customer Data</h2>
+                <div class="edit-search-form">
+                    <input type="text" id="edit-customer-name" placeholder="Customer Name">
+                    <input type="date" id="edit-customer-date">
+                    <button id="search-customer-btn">Search</button>
+                </div>
+                <div id="edit-results"></div>
+            </div>
+        </div>
+
         <div class="report-section">
             <h2>Saved Reports</h2>
             <ul id="report-list"></ul>
